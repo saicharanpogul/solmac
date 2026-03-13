@@ -24,7 +24,7 @@ enum PresetCategory: String, CaseIterable, Identifiable {
 }
 
 enum ProgramPresets {
-    static let all: [ProgramPreset] = tokenNFT + defi + oracle + infrastructure
+    static let all: [ProgramPreset] = tokenNFT + defi + meteora + oracle + infrastructure
 
     // MARK: - Token & NFT
 
@@ -153,6 +153,81 @@ enum ProgramPresets {
         ProgramPreset(
             name: "Drift Protocol",
             programAddress: "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+    ]
+
+    // MARK: - Meteora
+
+    static let meteora: [ProgramPreset] = [
+        ProgramPreset(
+            name: "Meteora DLMM",
+            programAddress: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora DAMM v2",
+            programAddress: "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora DAMM v1",
+            programAddress: "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Dynamic Bonding Curve",
+            programAddress: "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Dynamic Vault",
+            programAddress: "24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Alpha Vault",
+            programAddress: "vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Stake2Earn (M3M3)",
+            programAddress: "FEESngU3neckdwib9X3KWqdL7Mjmqk9XNp3uh5JbP4KP",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Dynamic Fee Sharing",
+            programAddress: "dfsdo2UqvwfN8DuUVrMRNfQe11VaiNoKcMqLHVvDPzh",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Zap",
+            programAddress: "zapvX9M3uf5pvy4wRPAbQgdQsM1xmuiFnkfHKPvwMiz",
+            isUpgradeable: true,
+            category: .defi,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Meteora Presale Vault",
+            programAddress: "presSVxnf9UU8jMxhgSMqaRwNiT36qeBdNeTRKjTdbj",
             isUpgradeable: true,
             category: .defi,
             associatedAccounts: []
