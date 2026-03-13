@@ -31,16 +31,22 @@ struct ItemEditorSheet: View {
     @State private var isUpgradeable: Bool
     @State private var useMaybeClone: Bool
 
+    // Auto-inspect state
+    @State private var isInspecting = false
+    @State private var inspectResult: InspectionResult?
+    @State private var inspectError: String?
+    @State private var addAssociatedAccounts = true
+
     private let programId: UUID
     private let accountId: UUID
-    private var onSaveProgram: ((CloneableProgram) -> Void)?
+    private var onSaveProgram: ((CloneableProgram, [(address: String, label: String)]) -> Void)?
     private var onSaveAccount: ((CloneableAccount) -> Void)?
 
     // Program initializer
     init(
         mode: EditorMode,
         program: CloneableProgram,
-        onSave: @escaping (CloneableProgram) -> Void,
+        onSave: @escaping (CloneableProgram, [(address: String, label: String)]) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.mode = mode
@@ -77,9 +83,8 @@ struct ItemEditorSheet: View {
     }
 
     private var isValid: Bool {
-        !address.trimmingCharacters(in: .whitespaces).isEmpty
-            && address.count >= 32
-            && address.count <= 44
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        return !trimmed.isEmpty && trimmed.count >= 32 && trimmed.count <= 44
     }
 
     var body: some View {
@@ -102,6 +107,59 @@ struct ItemEditorSheet: View {
 
                 if mode.isProgram {
                     Toggle("Upgradeable program", isOn: $isUpgradeable)
+
+                    // Auto-inspect button
+                    HStack {
+                        Button {
+                            Task { await inspect() }
+                        } label: {
+                            if isInspecting {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Inspecting...")
+                            } else {
+                                Image(systemName: "magnifyingglass.circle")
+                                Text("Auto-detect")
+                            }
+                        }
+                        .disabled(!isValid || isInspecting)
+                        .help("Inspect the program on-chain to detect upgradeability and find associated accounts")
+
+                        if let result = inspectResult {
+                            if result.isProgram {
+                                Label("Valid program", systemImage: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                            } else {
+                                Label("Not a program", systemImage: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        if let err = inspectError {
+                            Text(err)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+
+                    // Show detected associated accounts
+                    if let result = inspectResult, !result.associatedAccounts.isEmpty {
+                        Section("Detected Accounts") {
+                            Toggle("Also add associated accounts", isOn: $addAssociatedAccounts)
+                            ForEach(result.associatedAccounts, id: \.address) { acct in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(acct.label)
+                                            .font(.caption)
+                                        Text(acct.address)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     Toggle("Optional (skip if not found)", isOn: $useMaybeClone)
                 }
@@ -121,7 +179,28 @@ struct ItemEditorSheet: View {
             }
             .padding()
         }
-        .frame(width: 450)
+        .frame(width: 480, height: mode.isProgram ? 420 : 320)
+    }
+
+    private func inspect() async {
+        isInspecting = true
+        inspectError = nil
+        inspectResult = nil
+
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        let result = await ProgramInspector.inspect(
+            address: trimmed,
+            cluster: cluster
+        )
+
+        inspectResult = result
+        isInspecting = false
+
+        if result.isProgram {
+            isUpgradeable = result.isUpgradeable
+        } else {
+            inspectError = "Address does not appear to be a program"
+        }
     }
 
     private func save() {
@@ -137,7 +216,8 @@ struct ItemEditorSheet: View {
                 isEnabled: true,
                 isUpgradeable: isUpgradeable
             )
-            onSaveProgram?(program)
+            let associated = (addAssociatedAccounts ? inspectResult?.associatedAccounts : nil) ?? []
+            onSaveProgram?(program, associated)
         } else {
             let account = CloneableAccount(
                 id: accountId,

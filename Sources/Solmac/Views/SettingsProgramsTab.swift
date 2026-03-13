@@ -79,11 +79,23 @@ struct SettingsProgramsTab: View {
                 ItemEditorSheet(
                     mode: isAddingNew ? .addProgram : .editProgram,
                     program: program,
-                    onSave: { saved in
+                    onSave: { saved, associatedAccounts in
                         if isAddingNew {
                             configManager.addProgram(saved)
                         } else {
                             configManager.updateProgram(saved)
+                        }
+                        // Add any detected associated accounts
+                        for acct in associatedAccounts {
+                            if !configManager.config.accounts.contains(where: { $0.address == acct.address }) {
+                                configManager.addAccount(CloneableAccount(
+                                    address: acct.address,
+                                    label: acct.label,
+                                    cluster: saved.cluster,
+                                    isEnabled: true,
+                                    useMaybeClone: true
+                                ))
+                            }
                         }
                         showingEditor = false
                     },

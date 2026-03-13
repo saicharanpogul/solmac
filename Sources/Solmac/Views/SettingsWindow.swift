@@ -7,6 +7,10 @@ struct SettingsWindow: View {
                 .tabItem {
                     Label("General", systemImage: "gear")
                 }
+            SettingsPresetsTab()
+                .tabItem {
+                    Label("Presets", systemImage: "square.grid.2x2")
+                }
             SettingsProgramsTab()
                 .tabItem {
                     Label("Programs", systemImage: "cpu")
