@@ -10,6 +10,19 @@ struct SettingsAccountsTab: View {
     @Environment(ConfigManager.self) private var configManager
     @State private var editItem: AccountEditItem?
     @State private var deleteTarget: CloneableAccount?
+    @State private var searchText = ""
+
+    private var filteredAccounts: [CloneableAccount] {
+        guard !searchText.isEmpty else { return configManager.config.accounts }
+        return configManager.config.accounts.filter {
+            $0.label.localizedCaseInsensitiveContains(searchText)
+                || $0.address.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    private var enabledCount: Int {
+        configManager.config.accounts.filter(\.isEnabled).count
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,8 +33,18 @@ struct SettingsAccountsTab: View {
                     description: Text("Add accounts to clone into your local validator.")
                 )
             } else {
+                // Search bar
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search accounts...", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+
                 List {
-                    ForEach(configManager.config.accounts) { account in
+                    ForEach(filteredAccounts) { account in
                         AccountRow(
                             account: account,
                             onToggle: { @MainActor enabled in
@@ -34,6 +57,10 @@ struct SettingsAccountsTab: View {
                             },
                             onDelete: {
                                 deleteTarget = account
+                            },
+                            onCopyAddress: {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(account.address, forType: .string)
                             }
                         )
                     }
@@ -46,7 +73,34 @@ struct SettingsAccountsTab: View {
             Divider()
 
             HStack {
+                if !configManager.config.accounts.isEmpty {
+                    Text("\(enabledCount)/\(configManager.config.accounts.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("All") {
+                        for account in configManager.config.accounts where !account.isEnabled {
+                            var a = account
+                            a.isEnabled = true
+                            configManager.updateAccount(a)
+                        }
+                    }
+                    .controlSize(.small)
+                    .disabled(enabledCount == configManager.config.accounts.count)
+
+                    Button("None") {
+                        for account in configManager.config.accounts where account.isEnabled {
+                            var a = account
+                            a.isEnabled = false
+                            configManager.updateAccount(a)
+                        }
+                    }
+                    .controlSize(.small)
+                    .disabled(enabledCount == 0)
+                }
+
                 Spacer()
+
                 Button("Add Account") {
                     editItem = AccountEditItem(
                         account: CloneableAccount(address: ""),
@@ -98,6 +152,7 @@ struct AccountRow: View {
     let onToggle: @MainActor @Sendable (Bool) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    var onCopyAddress: (() -> Void)? = nil
 
     var body: some View {
         HStack {
@@ -118,6 +173,8 @@ struct AccountRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .onTapGesture { onCopyAddress?() }
+                        .help("Click to copy address")
                     ClusterBadge(cluster: account.cluster)
                     if account.useMaybeClone {
                         Text("Optional")

@@ -102,4 +102,33 @@ final class ConfigManager {
         let data = try Data(contentsOf: url)
         config = try decoder.decode(SolmacConfig.self, from: data)
     }
+
+    // MARK: - Profiles
+
+    var availableProfiles: [String] {
+        let fm = FileManager.default
+        let dir = SolmacConstants.profilesDir
+        guard let files = try? fm.contentsOfDirectory(atPath: dir.path) else { return [] }
+        return files
+            .filter { $0.hasSuffix(".json") }
+            .map { String($0.dropLast(5)) }
+            .sorted()
+    }
+
+    func saveProfile(named name: String) throws {
+        let url = SolmacConstants.profilesDir.appendingPathComponent("\(name).json")
+        let data = try encoder.encode(config)
+        try data.write(to: url, options: .atomic)
+    }
+
+    func loadProfile(named name: String) throws {
+        let url = SolmacConstants.profilesDir.appendingPathComponent("\(name).json")
+        let data = try Data(contentsOf: url)
+        config = try decoder.decode(SolmacConfig.self, from: data)
+    }
+
+    func deleteProfile(named name: String) throws {
+        let url = SolmacConstants.profilesDir.appendingPathComponent("\(name).json")
+        try FileManager.default.removeItem(at: url)
+    }
 }

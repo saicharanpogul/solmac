@@ -16,6 +16,23 @@ enum Brand: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var svgResourceName: String {
+        switch self {
+        case .metaplex: "MPLX"
+        case .spl: "SPL"
+        case .jupiter: "JUP"
+        case .raydium: "RAY"
+        case .orca: "ORCA"
+        case .meteora: "METEORA"
+        case .marinade: "MNDE"
+        case .phoenix: "PHOENIX"
+        case .drift: "DRIFT"
+        case .pyth: "PYTH"
+        case .switchboard: "SWITCHBOARD"
+        case .clockwork: "CLOCKWORK"
+        }
+    }
+
     var initial: String {
         switch self {
         case .metaplex: "Mx"
@@ -56,12 +73,31 @@ struct BrandIcon: View {
     var size: CGFloat = 24
 
     var body: some View {
-        Text(brand.initial)
-            .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(brand.color.gradient)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        if let image = Self.loadSVG(named: brand.svgResourceName) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        } else {
+            // Fallback to initial
+            Text(brand.initial)
+                .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(brand.color.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
+        }
+    }
+
+    private static var imageCache: [String: NSImage] = [:]
+
+    private static func loadSVG(named name: String) -> NSImage? {
+        if let cached = imageCache[name] { return cached }
+        guard let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "BrandIcons"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        imageCache[name] = image
+        return image
     }
 }
 

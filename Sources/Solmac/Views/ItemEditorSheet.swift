@@ -22,6 +22,7 @@ enum EditorMode {
 }
 
 struct ItemEditorSheet: View {
+    @Environment(ConfigManager.self) private var configManager
     let mode: EditorMode
     var onCancel: () -> Void
 
@@ -87,6 +88,16 @@ struct ItemEditorSheet: View {
         return !trimmed.isEmpty && trimmed.count >= 32 && trimmed.count <= 44
     }
 
+    private var isDuplicate: Bool {
+        let trimmed = address.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        if mode.isProgram {
+            return mode == .addProgram && configManager.config.programs.contains { $0.address == trimmed }
+        } else {
+            return mode == .addAccount && configManager.config.accounts.contains { $0.address == trimmed }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Text(mode.title)
@@ -96,6 +107,12 @@ struct ItemEditorSheet: View {
             Form {
                 TextField("Address", text: $address, prompt: Text("Base58 public key"))
                     .font(.system(.body, design: .monospaced))
+
+                if isDuplicate {
+                    Label("This address already exists", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
 
                 TextField("Label", text: $label, prompt: Text("Optional display name"))
 

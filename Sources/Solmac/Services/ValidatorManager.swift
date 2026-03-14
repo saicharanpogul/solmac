@@ -5,16 +5,23 @@ import UserNotifications
 @MainActor
 final class ValidatorManager {
     private(set) var state: ValidatorState = .stopped
+    let healthCheck = HealthCheckService()
 
     private var process: Process?
     private let configManager: ConfigManager
     private let logManager: LogManager
     private var monitorTask: Task<Void, Never>?
+    private(set) var validatorVersion: String?
 
     init(configManager: ConfigManager, logManager: LogManager) {
         self.configManager = configManager
         self.logManager = logManager
         requestNotificationPermission()
+        detectVersion()
+    }
+
+    var rpcURL: String {
+        "http://127.0.0.1:\(configManager.config.rpcPort)"
     }
 
     private func requestNotificationPermission() {
@@ -30,6 +37,58 @@ final class ValidatorManager {
         UNUserNotificationCenter.current().add(request)
     }
 
+    private func detectVersion() {
+        Task.detached {
+            let path = await self.resolveValidatorPath()
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = ["--version"]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = Pipe()
+            do {
+                try process.run()
+                process.waitUntilExit()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let output = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) {
+                    // Output like "solana-test-validator 1.18.22 (src:...)"
+                    let version = output
+                        .replacingOccurrences(of: "solana-test-validator ", with: "")
+                        .components(separatedBy: " ").first ?? output
+                    await MainActor.run {
+                        self.validatorVersion = version
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    func airdrop(to address: String, amount: Double = 2.0) async -> Bool {
+        let solanaPath = resolveValidatorPath()
+            .replacingOccurrences(of: "solana-test-validator", with: "solana")
+        do {
+            let result = try await ProcessRunner.run(
+                executable: solanaPath,
+                arguments: [
+                    "airdrop", String(amount),
+                    address,
+                    "--url", rpcURL
+                ]
+            )
+            if result.exitCode == 0 {
+                logManager.append("[INFO] Airdropped \(amount) SOL to \(address)")
+                return true
+            } else {
+                logManager.append("[WARN] Airdrop failed: \(result.stderr)")
+                return false
+            }
+        } catch {
+            logManager.append("[ERROR] Airdrop error: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func start() async {
         guard state.canStart else { return }
 
@@ -37,7 +96,7 @@ final class ValidatorManager {
             let validatorPath = resolveValidatorPath()
 
             // Pre-fetch cross-cluster items
-            let solanaPath = validatorPath // same directory
+            let solanaPath = validatorPath
             let preFetchService = PreFetchService(solanaPath: solanaPath)
 
             state = .prefetching(progress: "Preparing...")
@@ -78,11 +137,11 @@ final class ValidatorManager {
 
             state = .running(pid: proc.processIdentifier)
 
+            // Start health check polling
+            healthCheck.startPolling(rpcPort: configManager.config.rpcPort)
+
             // Monitor for exit
-            let stoppingState = state
-            _ = stoppingState // suppress warning
             monitorTask = Task { @MainActor [weak self] in
-                // Wait for process exit on a background thread
                 let exitCode = await withCheckedContinuation { continuation in
                     DispatchQueue.global().async {
                         proc.waitUntilExit()
@@ -90,6 +149,7 @@ final class ValidatorManager {
                     }
                 }
                 guard let self else { return }
+                self.healthCheck.stopPolling()
                 if exitCode == 0 || self.state == .stopping {
                     self.state = .stopped
                 } else {
@@ -122,6 +182,7 @@ final class ValidatorManager {
     }
 
     func cleanup() {
+        healthCheck.stopPolling()
         monitorTask?.cancel()
         if let process, process.isRunning {
             process.terminate()
@@ -129,7 +190,7 @@ final class ValidatorManager {
         }
     }
 
-    private func resolveValidatorPath() -> String {
+    func resolveValidatorPath() -> String {
         let configPath = configManager.config.validatorPath
         if !configPath.isEmpty {
             return configPath

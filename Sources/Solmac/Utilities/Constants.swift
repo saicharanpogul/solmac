@@ -10,8 +10,10 @@ enum SolmacConstants {
     static let accountsCacheDir = cacheDir.appendingPathComponent("accounts")
     static let programsCacheDir = cacheDir.appendingPathComponent("programs")
 
+    static let profilesDir = configDir.appendingPathComponent("profiles")
+
     static let allDirectories: [URL] = [
-        configDir, logDir, cacheDir, accountsCacheDir, programsCacheDir
+        configDir, logDir, cacheDir, accountsCacheDir, programsCacheDir, profilesDir
     ]
 
     static func ensureDirectories() {

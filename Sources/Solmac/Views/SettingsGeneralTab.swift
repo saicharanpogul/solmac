@@ -6,6 +6,9 @@ struct SettingsGeneralTab: View {
     @State private var showExportPanel = false
     @State private var showImportPanel = false
     @State private var importError: String?
+    @State private var newProfileName = ""
+    @State private var profileError: String?
+    @State private var deleteProfileTarget: String?
 
     var body: some View {
         @Bindable var cm = configManager
@@ -59,6 +62,53 @@ struct SettingsGeneralTab: View {
                 Text("One argument per space-separated token. These are appended to the validator command.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Profiles") {
+                if configManager.availableProfiles.isEmpty {
+                    Text("No saved profiles")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                } else {
+                    ForEach(configManager.availableProfiles, id: \.self) { name in
+                        HStack {
+                            Text(name)
+                            Spacer()
+                            Button("Load") {
+                                do {
+                                    try configManager.loadProfile(named: name)
+                                } catch {
+                                    profileError = error.localizedDescription
+                                }
+                            }
+                            .controlSize(.small)
+                            Button {
+                                deleteProfileTarget = name
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+                HStack {
+                    TextField("Profile name", text: $newProfileName, prompt: Text("e.g. DeFi Dev"))
+                        .textFieldStyle(.roundedBorder)
+                    Button("Save Current") {
+                        let name = newProfileName.trimmingCharacters(in: .whitespaces)
+                        guard !name.isEmpty else { return }
+                        do {
+                            try configManager.saveProfile(named: name)
+                            newProfileName = ""
+                        } catch {
+                            profileError = error.localizedDescription
+                        }
+                    }
+                    .controlSize(.small)
+                    .disabled(newProfileName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
 
             Section("Configuration") {
@@ -123,6 +173,32 @@ struct SettingsGeneralTab: View {
         } message: {
             if let importError {
                 Text(importError)
+            }
+        }
+        .alert("Delete Profile", isPresented: Binding(
+            get: { deleteProfileTarget != nil },
+            set: { if !$0 { deleteProfileTarget = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let name = deleteProfileTarget {
+                    try? configManager.deleteProfile(named: name)
+                }
+                deleteProfileTarget = nil
+            }
+            Button("Cancel", role: .cancel) { deleteProfileTarget = nil }
+        } message: {
+            if let name = deleteProfileTarget {
+                Text("Delete profile \"\(name)\"?")
+            }
+        }
+        .alert("Profile Error", isPresented: Binding(
+            get: { profileError != nil },
+            set: { if !$0 { profileError = nil } }
+        )) {
+            Button("OK") { profileError = nil }
+        } message: {
+            if let profileError {
+                Text(profileError)
             }
         }
     }

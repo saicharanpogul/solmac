@@ -9,7 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Solmac",
-            path: "Sources/Solmac"
+            path: "Sources/Solmac",
+            resources: [
+                .copy("Resources/BrandIcons")
+            ]
         )
     ]
 )
