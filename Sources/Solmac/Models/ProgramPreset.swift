@@ -12,11 +12,10 @@ enum Brand: String, CaseIterable, Identifiable {
     case drift = "Drift"
     case pyth = "Pyth"
     case switchboard = "Switchboard"
-    case clockwork = "Clockwork"
 
     var id: String { rawValue }
 
-    var svgResourceName: String {
+    var iconResourceName: String {
         switch self {
         case .metaplex: "MPLX"
         case .spl: "SPL"
@@ -29,7 +28,6 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: "DRIFT"
         case .pyth: "PYTH"
         case .switchboard: "SWITCHBOARD"
-        case .clockwork: "CLOCKWORK"
         }
     }
 
@@ -46,7 +44,6 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: "Dr"
         case .pyth: "Py"
         case .switchboard: "Sw"
-        case .clockwork: "Ck"
         }
     }
 
@@ -63,7 +60,6 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: Color(red: 0.56, green: 0.38, blue: 0.93)     // purple
         case .pyth: Color(red: 0.42, green: 0.35, blue: 0.80)      // deep purple
         case .switchboard: Color(red: 0.10, green: 0.80, blue: 0.45) // green
-        case .clockwork: Color(red: 0.40, green: 0.65, blue: 0.90) // sky blue
         }
     }
 }
@@ -73,14 +69,15 @@ struct BrandIcon: View {
     var size: CGFloat = 24
 
     var body: some View {
-        if let image = Self.loadSVG(named: brand.svgResourceName) {
+        if let image = Self.loadIcon(named: brand.iconResourceName) {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: size * 0.22))
         } else {
-            // Fallback to initial
+            // Fallback to colored initial
             Text(brand.initial)
                 .font(.system(size: size * 0.42, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -92,12 +89,17 @@ struct BrandIcon: View {
 
     private static var imageCache: [String: NSImage] = [:]
 
-    private static func loadSVG(named name: String) -> NSImage? {
+    private static func loadIcon(named name: String) -> NSImage? {
         if let cached = imageCache[name] { return cached }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "svg", subdirectory: "BrandIcons"),
-              let image = NSImage(contentsOf: url) else { return nil }
-        imageCache[name] = image
-        return image
+        // Try PNG first, then SVG
+        for ext in ["png", "svg"] {
+            if let url = Bundle.module.url(forResource: name, withExtension: ext, subdirectory: "BrandIcons"),
+               let image = NSImage(contentsOf: url) {
+                imageCache[name] = image
+                return image
+            }
+        }
+        return nil
     }
 }
 
@@ -411,14 +413,6 @@ enum ProgramPresets {
             programAddress: "namesLPneVptA9Z5rqUDD9tMTWEJwofgaYwp8cawRkX",
             isUpgradeable: true,
             brand: .spl,
-            category: .infrastructure,
-            associatedAccounts: []
-        ),
-        ProgramPreset(
-            name: "Thread v2",
-            programAddress: "CLoCKyJ6DXBJqqu2VWx9RLbgnwwR6BMHHuyasVmfMzBh",
-            isUpgradeable: true,
-            brand: .clockwork,
             category: .infrastructure,
             associatedAccounts: []
         ),
