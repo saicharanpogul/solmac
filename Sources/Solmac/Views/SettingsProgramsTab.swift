@@ -1,10 +1,16 @@
 import SwiftUI
 
+/// Wrapper to distinguish add vs edit in `.sheet(item:)`
+struct ProgramEditItem: Identifiable {
+    let id = UUID()
+    let program: CloneableProgram
+    let isNew: Bool
+}
+
 struct SettingsProgramsTab: View {
     @Environment(ConfigManager.self) private var configManager
-    @State private var editingProgram: CloneableProgram?
-    @State private var showingEditor = false
-    @State private var isAddingNew = false
+    @State private var editItem: ProgramEditItem?
+    @State private var isFetchingAll = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,52 +18,25 @@ struct SettingsProgramsTab: View {
                 ContentUnavailableView(
                     "No Programs",
                     systemImage: "cpu",
-                    description: Text("Add programs to clone into your local validator.")
+                    description: Text("Add programs from the Presets tab or manually.")
                 )
             } else {
                 List {
                     ForEach(configManager.config.programs) { program in
-                        HStack {
-                            Toggle("", isOn: programBinding(for: program.id))
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-                                .controlSize(.small)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(program.label)
-                                    .fontWeight(.medium)
-                                HStack(spacing: 4) {
-                                    Text(program.address)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                    ClusterBadge(cluster: program.cluster)
-                                    if program.isUpgradeable {
-                                        Text("Upgradeable")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 1)
-                                            .background(.blue.opacity(0.15))
-                                            .clipShape(Capsule())
-                                    }
-                                }
+                        ProgramRow(
+                            program: program,
+                            onToggle: { @MainActor enabled in
+                                var p = program
+                                p.isEnabled = enabled
+                                configManager.updateProgram(p)
+                            },
+                            onEdit: {
+                                editItem = ProgramEditItem(program: program, isNew: false)
+                            },
+                            onDelete: {
+                                configManager.removeProgram(id: program.id)
                             }
-
-                            Spacer()
-
-                            Button { editProgram(program) } label: {
-                                Image(systemName: "pencil")
-                            }
-                            .buttonStyle(.borderless)
-
-                            Button { configManager.removeProgram(id: program.id) } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                        .padding(.vertical, 2)
+                        )
                     }
                 }
             }
@@ -65,83 +44,143 @@ struct SettingsProgramsTab: View {
             Divider()
 
             HStack {
+                Button {
+                    Task { await fetchAllLatest() }
+                } label: {
+                    if isFetchingAll {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Fetching...")
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Fetch Latest")
+                    }
+                }
+                .controlSize(.small)
+                .disabled(isFetchingAll || configManager.config.programs.isEmpty)
+                .help("Re-fetch all enabled programs from their respective clusters to update the local cache")
+
                 Spacer()
+
                 Button("Add Program") {
-                    isAddingNew = true
-                    editingProgram = CloneableProgram(address: "")
-                    showingEditor = true
+                    editItem = ProgramEditItem(
+                        program: CloneableProgram(address: ""),
+                        isNew: true
+                    )
                 }
-                .padding(8)
+                .controlSize(.small)
             }
+            .padding(8)
         }
-        .sheet(isPresented: $showingEditor) {
-            if let program = editingProgram {
-                ItemEditorSheet(
-                    mode: isAddingNew ? .addProgram : .editProgram,
-                    program: program,
-                    onSave: { saved, associatedAccounts in
-                        if isAddingNew {
-                            configManager.addProgram(saved)
-                        } else {
-                            configManager.updateProgram(saved)
+        .sheet(item: $editItem) { item in
+            ItemEditorSheet(
+                mode: item.isNew ? .addProgram : .editProgram,
+                program: item.program,
+                onSave: { saved, associatedAccounts in
+                    if item.isNew {
+                        configManager.addProgram(saved)
+                    } else {
+                        configManager.updateProgram(saved)
+                    }
+                    for acct in associatedAccounts {
+                        if !configManager.config.accounts.contains(where: { $0.address == acct.address }) {
+                            configManager.addAccount(CloneableAccount(
+                                address: acct.address,
+                                label: acct.label,
+                                cluster: saved.cluster,
+                                isEnabled: true,
+                                useMaybeClone: true
+                            ))
                         }
-                        // Add any detected associated accounts
-                        for acct in associatedAccounts {
-                            if !configManager.config.accounts.contains(where: { $0.address == acct.address }) {
-                                configManager.addAccount(CloneableAccount(
-                                    address: acct.address,
-                                    label: acct.label,
-                                    cluster: saved.cluster,
-                                    isEnabled: true,
-                                    useMaybeClone: true
-                                ))
-                            }
-                        }
-                        showingEditor = false
-                    },
-                    onCancel: { showingEditor = false }
-                )
-            }
+                    }
+                    editItem = nil
+                },
+                onCancel: { editItem = nil }
+            )
         }
     }
 
-    private func editProgram(_ program: CloneableProgram) {
-        isAddingNew = false
-        editingProgram = program
-        showingEditor = true
-    }
+    private func fetchAllLatest() async {
+        isFetchingAll = true
+        let enabledPrograms = configManager.config.programs.filter(\.isEnabled)
 
-    private func programBinding(for id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { configManager.config.programs.first(where: { $0.id == id })?.isEnabled ?? false },
-            set: { newValue in
-                if var p = configManager.config.programs.first(where: { $0.id == id }) {
-                    p.isEnabled = newValue
-                    configManager.updateProgram(p)
+        for program in enabledPrograms {
+            let result = await ProgramInspector.inspect(
+                address: program.address,
+                cluster: program.cluster
+            )
+            if result.isProgram && result.isUpgradeable != program.isUpgradeable {
+                var updated = program
+                updated.isUpgradeable = result.isUpgradeable
+                configManager.updateProgram(updated)
+            }
+            // Add any newly discovered associated accounts
+            for acct in result.associatedAccounts {
+                if !configManager.config.accounts.contains(where: { $0.address == acct.address }) {
+                    configManager.addAccount(CloneableAccount(
+                        address: acct.address,
+                        label: acct.label,
+                        cluster: program.cluster,
+                        isEnabled: true,
+                        useMaybeClone: true
+                    ))
                 }
             }
-        )
+        }
+        isFetchingAll = false
     }
 }
 
-struct ClusterBadge: View {
-    let cluster: ClusterSource
+struct ProgramRow: View {
+    let program: CloneableProgram
+    let onToggle: @MainActor @Sendable (Bool) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        Text(cluster.displayName)
-            .font(.caption2)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(badgeColor.opacity(0.15))
-            .foregroundStyle(badgeColor)
-            .clipShape(Capsule())
-    }
+        HStack {
+            Toggle("", isOn: Binding(
+                get: { program.isEnabled },
+                set: { onToggle($0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
 
-    private var badgeColor: Color {
-        switch cluster {
-        case .mainnetBeta: .green
-        case .devnet: .purple
-        case .testnet: .orange
+            VStack(alignment: .leading, spacing: 2) {
+                Text(program.label)
+                    .fontWeight(.medium)
+                HStack(spacing: 4) {
+                    Text(program.address)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    ClusterBadge(cluster: program.cluster)
+                    if program.isUpgradeable {
+                        Text("Upgradeable")
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.blue.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.borderless)
         }
+        .padding(.vertical, 2)
     }
 }

@@ -2,17 +2,19 @@ import SwiftUI
 
 struct SettingsPresetsTab: View {
     @Environment(ConfigManager.self) private var configManager
-    @State private var selectedCategory: PresetCategory? = nil
+    @State private var selectedBrand: Brand? = nil
     @State private var searchText = ""
+    @State private var clusterOverride: [UUID: ClusterSource] = [:]
 
     private var filteredPresets: [ProgramPreset] {
         var presets = ProgramPresets.all
-        if let cat = selectedCategory {
-            presets = presets.filter { $0.category == cat }
+        if let brand = selectedBrand {
+            presets = presets.filter { $0.brand == brand }
         }
         if !searchText.isEmpty {
             presets = presets.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText)
+                    || $0.brand.rawValue.localizedCaseInsensitiveContains(searchText)
                     || $0.programAddress.localizedCaseInsensitiveContains(searchText)
             }
         }
@@ -21,32 +23,47 @@ struct SettingsPresetsTab: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filter bar
+            // Search bar
             HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
                 TextField("Search programs...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
 
-                Picker("Category", selection: $selectedCategory) {
-                    Text("All").tag(nil as PresetCategory?)
-                    ForEach(PresetCategory.allCases) { cat in
-                        Text(cat.rawValue).tag(cat as PresetCategory?)
+            // Brand filter tabs
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    BrandFilterChip(label: "All", icon: nil, isSelected: selectedBrand == nil) {
+                        selectedBrand = nil
+                    }
+                    ForEach(ProgramPresets.brands) { brand in
+                        BrandFilterChip(label: brand.rawValue, icon: brand, isSelected: selectedBrand == brand) {
+                            selectedBrand = selectedBrand == brand ? nil : brand
+                        }
                     }
                 }
-                .frame(width: 180)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
             }
-            .padding(8)
 
             Divider()
 
             // Presets list
             List {
                 ForEach(filteredPresets) { preset in
-                    HStack {
+                    HStack(spacing: 10) {
+                        BrandIcon(brand: preset.brand, size: 28)
+
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
+                                Text(preset.brand.rawValue)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 Text(preset.name)
                                     .fontWeight(.medium)
-                                CategoryBadge(category: preset.category)
                                 if preset.isUpgradeable {
                                     Text("Upgradeable")
                                         .font(.caption2)
@@ -57,7 +74,7 @@ struct SettingsPresetsTab: View {
                                 }
                             }
                             Text(preset.programAddress)
-                                .font(.caption)
+                                .font(.system(.caption2, design: .monospaced))
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                             if !preset.associatedAccounts.isEmpty {
@@ -74,6 +91,15 @@ struct SettingsPresetsTab: View {
                                 .font(.caption)
                                 .foregroundStyle(.green)
                         } else {
+                            // Cluster picker for this preset
+                            Picker("", selection: clusterBinding(for: preset.id)) {
+                                ForEach(ClusterSource.allCases) { source in
+                                    Text(source.displayName).tag(source)
+                                }
+                            }
+                            .frame(width: 90)
+                            .controlSize(.small)
+
                             Button("Add") {
                                 addPreset(preset)
                             }
@@ -86,9 +112,8 @@ struct SettingsPresetsTab: View {
 
             Divider()
 
-            // Summary
             HStack {
-                Text("\(filteredPresets.count) programs available")
+                Text("\(filteredPresets.count) programs")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -104,57 +129,69 @@ struct SettingsPresetsTab: View {
         }
     }
 
+    private func clusterBinding(for id: UUID) -> Binding<ClusterSource> {
+        Binding(
+            get: { clusterOverride[id] ?? .mainnetBeta },
+            set: { clusterOverride[id] = $0 }
+        )
+    }
+
     private func isAlreadyAdded(_ preset: ProgramPreset) -> Bool {
         configManager.config.programs.contains { $0.address == preset.programAddress }
     }
 
     private func addPreset(_ preset: ProgramPreset) {
-        // Add the program
+        let cluster = clusterOverride[preset.id] ?? .mainnetBeta
         let program = CloneableProgram(
             address: preset.programAddress,
-            label: preset.name,
-            cluster: .mainnetBeta,
+            label: "\(preset.brand.rawValue) \(preset.name)",
+            cluster: cluster,
             isEnabled: true,
             isUpgradeable: preset.isUpgradeable
         )
         configManager.addProgram(program)
 
-        // Add associated accounts
         for assoc in preset.associatedAccounts {
-            // Avoid duplicates
             if !configManager.config.accounts.contains(where: { $0.address == assoc.address }) {
-                let account = CloneableAccount(
+                configManager.addAccount(CloneableAccount(
                     address: assoc.address,
                     label: assoc.label,
-                    cluster: .mainnetBeta,
+                    cluster: cluster,
                     isEnabled: true,
                     useMaybeClone: true
-                )
-                configManager.addAccount(account)
+                ))
             }
         }
     }
 }
 
-struct CategoryBadge: View {
-    let category: PresetCategory
+struct BrandFilterChip: View {
+    let label: String
+    let icon: Brand?
+    let isSelected: Bool
+    let action: () -> Void
 
     var body: some View {
-        Text(category.rawValue)
-            .font(.caption2)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
-            .background(badgeColor.opacity(0.15))
-            .foregroundStyle(badgeColor)
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    BrandIcon(brand: icon, size: 16)
+                }
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .semibold : .regular)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+            .foregroundStyle(isSelected ? Color.accentColor : .primary)
             .clipShape(Capsule())
-    }
-
-    private var badgeColor: Color {
-        switch category {
-        case .tokenNFT: .purple
-        case .defi: .green
-        case .oracle: .orange
-        case .infrastructure: .blue
+            .overlay(
+                Capsule()
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
     }
 }
+

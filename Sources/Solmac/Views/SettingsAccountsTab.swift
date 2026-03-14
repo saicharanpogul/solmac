@@ -1,10 +1,14 @@
 import SwiftUI
 
+struct AccountEditItem: Identifiable {
+    let id = UUID()
+    let account: CloneableAccount
+    let isNew: Bool
+}
+
 struct SettingsAccountsTab: View {
     @Environment(ConfigManager.self) private var configManager
-    @State private var editingAccount: CloneableAccount?
-    @State private var showingEditor = false
-    @State private var isAddingNew = false
+    @State private var editItem: AccountEditItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,47 +21,20 @@ struct SettingsAccountsTab: View {
             } else {
                 List {
                     ForEach(configManager.config.accounts) { account in
-                        HStack {
-                            Toggle("", isOn: accountBinding(for: account.id))
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-                                .controlSize(.small)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(account.label)
-                                    .fontWeight(.medium)
-                                HStack(spacing: 4) {
-                                    Text(account.address)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                    ClusterBadge(cluster: account.cluster)
-                                    if account.useMaybeClone {
-                                        Text("Optional")
-                                            .font(.caption2)
-                                            .padding(.horizontal, 4)
-                                            .padding(.vertical, 1)
-                                            .background(.yellow.opacity(0.15))
-                                            .clipShape(Capsule())
-                                    }
-                                }
+                        AccountRow(
+                            account: account,
+                            onToggle: { @MainActor enabled in
+                                var a = account
+                                a.isEnabled = enabled
+                                configManager.updateAccount(a)
+                            },
+                            onEdit: {
+                                editItem = AccountEditItem(account: account, isNew: false)
+                            },
+                            onDelete: {
+                                configManager.removeAccount(id: account.id)
                             }
-
-                            Spacer()
-
-                            Button { editAccount(account) } label: {
-                                Image(systemName: "pencil")
-                            }
-                            .buttonStyle(.borderless)
-
-                            Button { configManager.removeAccount(id: account.id) } label: {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-                        .padding(.vertical, 2)
+                        )
                     }
                 }
             }
@@ -67,47 +44,83 @@ struct SettingsAccountsTab: View {
             HStack {
                 Spacer()
                 Button("Add Account") {
-                    isAddingNew = true
-                    editingAccount = CloneableAccount(address: "")
-                    showingEditor = true
+                    editItem = AccountEditItem(
+                        account: CloneableAccount(address: ""),
+                        isNew: true
+                    )
                 }
-                .padding(8)
+                .controlSize(.small)
             }
+            .padding(8)
         }
-        .sheet(isPresented: $showingEditor) {
-            if let account = editingAccount {
-                ItemEditorSheet(
-                    mode: isAddingNew ? .addAccount : .editAccount,
-                    account: account,
-                    onSaveAccount: { saved in
-                        if isAddingNew {
-                            configManager.addAccount(saved)
-                        } else {
-                            configManager.updateAccount(saved)
-                        }
-                        showingEditor = false
-                    },
-                    onCancel: { showingEditor = false }
-                )
-            }
+        .sheet(item: $editItem) { item in
+            ItemEditorSheet(
+                mode: item.isNew ? .addAccount : .editAccount,
+                account: item.account,
+                onSaveAccount: { saved in
+                    if item.isNew {
+                        configManager.addAccount(saved)
+                    } else {
+                        configManager.updateAccount(saved)
+                    }
+                    editItem = nil
+                },
+                onCancel: { editItem = nil }
+            )
         }
     }
+}
 
-    private func editAccount(_ account: CloneableAccount) {
-        isAddingNew = false
-        editingAccount = account
-        showingEditor = true
-    }
+struct AccountRow: View {
+    let account: CloneableAccount
+    let onToggle: @MainActor @Sendable (Bool) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
 
-    private func accountBinding(for id: UUID) -> Binding<Bool> {
-        Binding(
-            get: { configManager.config.accounts.first(where: { $0.id == id })?.isEnabled ?? false },
-            set: { newValue in
-                if var a = configManager.config.accounts.first(where: { $0.id == id }) {
-                    a.isEnabled = newValue
-                    configManager.updateAccount(a)
+    var body: some View {
+        HStack {
+            Toggle("", isOn: Binding(
+                get: { account.isEnabled },
+                set: { onToggle($0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.label)
+                    .fontWeight(.medium)
+                HStack(spacing: 4) {
+                    Text(account.address)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    ClusterBadge(cluster: account.cluster)
+                    if account.useMaybeClone {
+                        Text("Optional")
+                            .font(.caption2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(.yellow.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
                 }
             }
-        )
+
+            Spacer()
+
+            Button(action: onEdit) {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.borderless)
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.vertical, 2)
     }
 }
