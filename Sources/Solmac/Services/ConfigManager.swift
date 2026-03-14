@@ -67,6 +67,10 @@ final class ConfigManager {
         }
     }
 
+    func movePrograms(from source: IndexSet, to destination: Int) {
+        config.programs.move(fromOffsets: source, toOffset: destination)
+    }
+
     // MARK: - Accounts
 
     func addAccount(_ account: CloneableAccount) {
@@ -81,5 +85,21 @@ final class ConfigManager {
         if let idx = config.accounts.firstIndex(where: { $0.id == account.id }) {
             config.accounts[idx] = account
         }
+    }
+
+    func moveAccounts(from source: IndexSet, to destination: Int) {
+        config.accounts.move(fromOffsets: source, toOffset: destination)
+    }
+
+    // MARK: - Export / Import
+
+    func exportConfig(to url: URL) throws {
+        let data = try encoder.encode(config)
+        try data.write(to: url, options: .atomic)
+    }
+
+    func importConfig(from url: URL) throws {
+        let data = try Data(contentsOf: url)
+        config = try decoder.decode(SolmacConfig.self, from: data)
     }
 }

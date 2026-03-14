@@ -11,6 +11,7 @@ struct SettingsProgramsTab: View {
     @Environment(ConfigManager.self) private var configManager
     @State private var editItem: ProgramEditItem?
     @State private var isFetchingAll = false
+    @State private var deleteTarget: CloneableProgram?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,9 +35,12 @@ struct SettingsProgramsTab: View {
                                 editItem = ProgramEditItem(program: program, isNew: false)
                             },
                             onDelete: {
-                                configManager.removeProgram(id: program.id)
+                                deleteTarget = program
                             }
                         )
+                    }
+                    .onMove { source, destination in
+                        configManager.movePrograms(from: source, to: destination)
                     }
                 }
             }
@@ -97,6 +101,24 @@ struct SettingsProgramsTab: View {
                 },
                 onCancel: { editItem = nil }
             )
+        }
+        .alert("Delete Program", isPresented: Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let target = deleteTarget {
+                    configManager.removeProgram(id: target.id)
+                }
+                deleteTarget = nil
+            }
+            Button("Cancel", role: .cancel) {
+                deleteTarget = nil
+            }
+        } message: {
+            if let target = deleteTarget {
+                Text("Are you sure you want to delete \"\(target.label)\"?")
+            }
         }
     }
 

@@ -12,6 +12,12 @@ struct SolmacApp: App {
                 .environment(configManager)
                 .environment(logManager)
                 .environment(validatorManager!)
+                .task {
+                    guard let vm = validatorManager,
+                          configManager.config.autoStartOnLaunch,
+                          vm.state.canStart else { return }
+                    await vm.start()
+                }
         } label: {
             let isRunning = validatorManager?.state.isRunning ?? false
             Image(nsImage: isRunning ? SolanaIcon.filled : SolanaIcon.outline)

@@ -9,6 +9,7 @@ struct AccountEditItem: Identifiable {
 struct SettingsAccountsTab: View {
     @Environment(ConfigManager.self) private var configManager
     @State private var editItem: AccountEditItem?
+    @State private var deleteTarget: CloneableAccount?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,9 +33,12 @@ struct SettingsAccountsTab: View {
                                 editItem = AccountEditItem(account: account, isNew: false)
                             },
                             onDelete: {
-                                configManager.removeAccount(id: account.id)
+                                deleteTarget = account
                             }
                         )
+                    }
+                    .onMove { source, destination in
+                        configManager.moveAccounts(from: source, to: destination)
                     }
                 }
             }
@@ -67,6 +71,24 @@ struct SettingsAccountsTab: View {
                 },
                 onCancel: { editItem = nil }
             )
+        }
+        .alert("Delete Account", isPresented: Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let target = deleteTarget {
+                    configManager.removeAccount(id: target.id)
+                }
+                deleteTarget = nil
+            }
+            Button("Cancel", role: .cancel) {
+                deleteTarget = nil
+            }
+        } message: {
+            if let target = deleteTarget {
+                Text("Are you sure you want to delete \"\(target.label)\"?")
+            }
         }
     }
 }

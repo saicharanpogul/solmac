@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 @Observable
 @MainActor
@@ -13,6 +14,20 @@ final class ValidatorManager {
     init(configManager: ConfigManager, logManager: LogManager) {
         self.configManager = configManager
         self.logManager = logManager
+        requestNotificationPermission()
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func sendCrashNotification(exitCode: Int32) {
+        let content = UNMutableNotificationContent()
+        content.title = "Validator Crashed"
+        content.body = "solana-test-validator exited unexpectedly with code \(exitCode)"
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "validator-crash", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     func start() async {
@@ -79,6 +94,7 @@ final class ValidatorManager {
                     self.state = .stopped
                 } else {
                     self.state = .error(message: "Exited with code \(exitCode)")
+                    self.sendCrashNotification(exitCode: exitCode)
                 }
                 self.process = nil
             }

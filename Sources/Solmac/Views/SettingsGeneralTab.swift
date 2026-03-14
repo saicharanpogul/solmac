@@ -1,7 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsGeneralTab: View {
     @Environment(ConfigManager.self) private var configManager
+    @State private var showExportPanel = false
+    @State private var showImportPanel = false
+    @State private var importError: String?
 
     var body: some View {
         @Bindable var cm = configManager
@@ -11,6 +15,7 @@ struct SettingsGeneralTab: View {
                 TextField("Validator Path", text: $cm.config.validatorPath, prompt: Text("Auto-detect"))
                 TextField("Ledger Directory", text: $cm.config.ledgerDirectory)
                 Toggle("Reset ledger on start", isOn: $cm.config.resetOnStart)
+                Toggle("Auto-start validator on launch", isOn: $cm.config.autoStartOnLaunch)
             }
 
             Section("Ports") {
@@ -56,7 +61,7 @@ struct SettingsGeneralTab: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Paths") {
+            Section("Configuration") {
                 LabeledContent("Config File") {
                     Text(SolmacConstants.configFile.path)
                         .textSelection(.enabled)
@@ -67,13 +72,59 @@ struct SettingsGeneralTab: View {
                         .textSelection(.enabled)
                         .font(.caption)
                 }
-                Button("Open Config Directory") {
-                    NSWorkspace.shared.open(SolmacConstants.configDir)
+                HStack(spacing: 12) {
+                    Button("Open Config Directory") {
+                        NSWorkspace.shared.open(SolmacConstants.configDir)
+                    }
+                    Spacer()
+                    Button("Export Config...") {
+                        showExportPanel = true
+                    }
+                    Button("Import Config...") {
+                        showImportPanel = true
+                    }
                 }
             }
         }
         .formStyle(.grouped)
         .padding()
+        .fileExporter(
+            isPresented: $showExportPanel,
+            document: ConfigDocument(config: configManager.config),
+            contentType: .json,
+            defaultFilename: "solmac-config.json"
+        ) { result in
+            if case .failure(let error) = result {
+                importError = error.localizedDescription
+            }
+        }
+        .fileImporter(
+            isPresented: $showImportPanel,
+            allowedContentTypes: [.json]
+        ) { result in
+            switch result {
+            case .success(let url):
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    try configManager.importConfig(from: url)
+                } catch {
+                    importError = error.localizedDescription
+                }
+            case .failure(let error):
+                importError = error.localizedDescription
+            }
+        }
+        .alert("Import Error", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK") { importError = nil }
+        } message: {
+            if let importError {
+                Text(importError)
+            }
+        }
     }
 
     private var additionalArgsBinding: Binding<String> {
@@ -86,5 +137,30 @@ struct SettingsGeneralTab: View {
                     .map(String.init)
             }
         )
+    }
+}
+
+/// FileDocument wrapper for exporting config via NSSavePanel
+struct ConfigDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    let config: SolmacConfig
+
+    init(config: SolmacConfig) {
+        self.config = config
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        config = try JSONDecoder().decode(SolmacConfig.self, from: data)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(config)
+        return FileWrapper(regularFileWithContents: data)
     }
 }
