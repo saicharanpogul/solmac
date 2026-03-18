@@ -89,7 +89,7 @@ final class ValidatorManager {
         }
     }
 
-    func start() async {
+    func start(forceReset: Bool = false) async {
         guard state.canStart else { return }
 
         do {
@@ -118,7 +118,8 @@ final class ValidatorManager {
             // Build command
             let args = CommandBuilder.buildArguments(
                 config: configManager.config,
-                prefetchResult: prefetchResult
+                prefetchResult: prefetchResult,
+                forceReset: forceReset
             )
 
             logManager.append("[INFO] Starting: \(validatorPath) \(args.joined(separator: " "))")

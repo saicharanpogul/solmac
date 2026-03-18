@@ -40,6 +40,10 @@ struct MenuBarView: View {
                     Task { await validator.start() }
                 }
                 .keyboardShortcut("r", modifiers: [.command])
+                Button("Start with Reset") {
+                    Task { await validator.start(forceReset: true) }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             } else if validator.state.canStop {
                 Button("Stop Validator") {
                     validator.stop()

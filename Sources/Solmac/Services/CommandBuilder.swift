@@ -21,13 +21,14 @@ struct PreFetchResult: Sendable {
 enum CommandBuilder {
     static func buildArguments(
         config: SolmacConfig,
-        prefetchResult: PreFetchResult
+        prefetchResult: PreFetchResult,
+        forceReset: Bool = false
     ) -> [String] {
         var args: [String] = []
 
         args += ["--ledger", config.ledgerDirectory]
 
-        if config.resetOnStart {
+        if config.resetOnStart || forceReset {
             args.append("--reset")
         }
 
