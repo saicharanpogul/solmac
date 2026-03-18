@@ -12,6 +12,7 @@ enum Brand: String, CaseIterable, Identifiable {
     case drift = "Drift"
     case pyth = "Pyth"
     case switchboard = "Switchboard"
+    case squads = "Squads"
 
     var id: String { rawValue }
 
@@ -28,6 +29,7 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: "DRIFT"
         case .pyth: "PYTH"
         case .switchboard: "SWITCHBOARD"
+        case .squads: "SQUADS"
         }
     }
 
@@ -44,6 +46,7 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: "Dr"
         case .pyth: "Py"
         case .switchboard: "Sw"
+        case .squads: "Sq"
         }
     }
 
@@ -60,6 +63,7 @@ enum Brand: String, CaseIterable, Identifiable {
         case .drift: Color(red: 0.56, green: 0.38, blue: 0.93)     // purple
         case .pyth: Color(red: 0.42, green: 0.35, blue: 0.80)      // deep purple
         case .switchboard: Color(red: 0.10, green: 0.80, blue: 0.45) // green
+        case .squads: Color(red: 0.14, green: 0.33, blue: 0.93)      // blue
         }
     }
 }
@@ -413,6 +417,22 @@ enum ProgramPresets {
             programAddress: "namesLPneVptA9Z5rqUDD9tMTWEJwofgaYwp8cawRkX",
             isUpgradeable: true,
             brand: .spl,
+            category: .infrastructure,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Multisig v4",
+            programAddress: "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf",
+            isUpgradeable: true,
+            brand: .squads,
+            category: .infrastructure,
+            associatedAccounts: []
+        ),
+        ProgramPreset(
+            name: "Multisig v3",
+            programAddress: "SMPLecH534Ngo7jXFxGaQBtKw2MQerPMxttRiGrsRXq",
+            isUpgradeable: true,
+            brand: .squads,
             category: .infrastructure,
             associatedAccounts: []
         ),
