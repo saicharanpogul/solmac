@@ -75,30 +75,32 @@ struct MenuBarView: View {
         }
 
         // Programs
-        Section("Programs") {
-            if config.config.programs.isEmpty {
-                Text("No programs configured")
-            } else {
-                ForEach(config.config.programs) { program in
-                    Toggle(
-                        "\(program.label) (\(program.cluster.displayName))",
-                        isOn: programBinding(for: program.id)
-                    )
-                }
+        Divider()
+        Text("Programs")
+            .disabled(true)
+        if config.config.programs.isEmpty {
+            Text("No programs configured")
+        } else {
+            ForEach(config.config.programs) { program in
+                Toggle(
+                    "\(program.label) (\(program.cluster.displayName))",
+                    isOn: programBinding(for: program.id)
+                )
             }
         }
 
         // Accounts
-        Section("Accounts") {
-            if config.config.accounts.isEmpty {
-                Text("No accounts configured")
-            } else {
-                ForEach(config.config.accounts) { account in
-                    Toggle(
-                        "\(account.label) (\(account.cluster.displayName))",
-                        isOn: accountBinding(for: account.id)
-                    )
-                }
+        Divider()
+        Text("Accounts")
+            .disabled(true)
+        if config.config.accounts.isEmpty {
+            Text("No accounts configured")
+        } else {
+            ForEach(config.config.accounts) { account in
+                Toggle(
+                    "\(account.label) (\(account.cluster.displayName))",
+                    isOn: accountBinding(for: account.id)
+                )
             }
         }
 
